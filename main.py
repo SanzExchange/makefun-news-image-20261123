@@ -1,66 +1,61 @@
 #!/usr/bin/env python3
-"""THE DAY IN PRINT - entry program for news-image-20261123 (akun1, @sanzex).
+"""THE DAY IN PRINT - akun1 entry program, news-image-20261123.
 
-Concept: a one-page front page for Monday 23 November 2026 - ivory paper,
-navy ink, red accent. Lead story: COP31 ends without a deal in Antalya,
-after the final Turkish draft dropped any mention of fossil fuels.
-12 numbered main cards, 28 also-on briefs, a day-in-numbers strip, a
-dotted world map with numbered pins and a red date-check box naming
-seven stories that were checked and left out as not from this day.
+Written for the G4 front page of THE DAY IN PRINT (ivory paper, navy
+ink, red accent): the whole of Monday 23 November 2026 on one page,
+led by COP31 ending without a deal in Antalya.
 
-This program is deliberately boring: standard library only, copy only.
-It reads the entry.png sitting next to it, verifies the PNG signature,
-the 1 MiB competition ceiling and the exact expected size and digest,
-then writes the identical bytes to the output directory. Two runs
-produce byte-identical output.
+Behaviour, in full: locate entry.png beside this file, read it once,
+guard it three ways (PNG signature, the 1 MiB ceiling, and an exact
+byte count plus sha256 pinned below), then copy it untouched into
+the directory named by MAKEFUN_OUTPUT_DIR (default /output).
+The pinned digest is the sha256 of the final rendered front page:
+282,013 bytes of ivory, navy and red, verified before every copy.
+Standard library only. No Pillow, no network, no randomness - the
+same input always lands as the same output bytes.
 """
 
 import hashlib
 import os
 import sys
 
-EXPECTED_BYTES = 282013
-EXPECTED_SHA256 = "1272c45c494ca2f15e4f2b1139544218ba1db939d2703daed4a28aff0069b1dc"
-
-PNG_HEADER = b"\x89PNG\r\n\x1a\n"
-CEILING = 1048576  # 1 MiB hard gate of the competition
-
-
-def load_entry():
-    folder = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(folder, "entry.png")
-    with open(path, "rb") as handle:
-        return handle.read()
+PINNED_BYTES = 282013
+PINNED_SHA256 = "1272c45c494ca2f15e4f2b1139544218ba1db939d2703daed4a28aff0069b1dc"
+SIGNATURE = b"\x89PNG\r\n\x1a\n"
+LIMIT = 1048576
 
 
-def check_payload(blob):
-    if not blob:
-        sys.exit("entry.png is empty")
-    if blob[:8] != PNG_HEADER:
-        sys.exit("entry.png does not start with the PNG signature")
-    if len(blob) > CEILING:
-        sys.exit("entry.png exceeds the 1 MiB ceiling: %d bytes" % len(blob))
-    if len(blob) != EXPECTED_BYTES:
-        sys.exit(
-            "entry.png size drifted: got %d, expected %d"
-            % (len(blob), EXPECTED_BYTES)
-        )
-    digest = hashlib.sha256(blob).hexdigest()
-    if digest != EXPECTED_SHA256:
-        sys.exit("entry.png sha256 drifted: %s" % digest)
-    return digest
+def read_neighbour():
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "entry.png"), "rb") as fh:
+        return fh.read()
 
 
-def main():
-    blob = load_entry()
-    digest = check_payload(blob)
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
-    os.makedirs(out_dir, exist_ok=True)
-    target = os.path.join(out_dir, "entry.png")
-    with open(target, "wb") as handle:
-        handle.write(blob)
-    sys.stderr.write("entry.png: %d bytes sha256=%s\n" % (len(blob), digest))
+def guard(blob):
+    if len(blob) == 0:
+        sys.exit("entry.png kosong")
+    if not blob.startswith(SIGNATURE):
+        sys.exit("entry.png bukan PNG")
+    if len(blob) > LIMIT:
+        sys.exit("entry.png lewat 1 MiB: %d" % len(blob))
+    if len(blob) != PINNED_BYTES:
+        sys.exit("ukuran berubah: %d != %d" % (len(blob), PINNED_BYTES))
+    if hashlib.sha256(blob).hexdigest() != PINNED_SHA256:
+        sys.exit("sha256 berubah")
+
+
+def run():
+    blob = read_neighbour()
+    guard(blob)
+    dest_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or "/output"
+    os.makedirs(dest_dir, exist_ok=True)
+    with open(os.path.join(dest_dir, "entry.png"), "wb") as fh:
+        fh.write(blob)
+    sys.stderr.write(
+        "copied entry.png (%d bytes, sha256 %s)\n"
+        % (len(blob), hashlib.sha256(blob).hexdigest())
+    )
 
 
 if __name__ == "__main__":
-    main()
+    run()
